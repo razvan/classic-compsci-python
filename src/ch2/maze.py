@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 
+# this is needed for Node definition which references it's self.
+from __future__ import annotations
 from functools import partial
 from collections import deque
 from enum import StrEnum
-from typing import Deque, Iterator, NamedTuple, List, Optional, Generic, TypeVar, Self, Callable, Set
+from typing import Deque, Dict, Iterator, List, Optional, Generic, TypeVar, Callable, Set
 from dataclasses import dataclass, field
 from itertools import product
 from random import uniform, seed
 from copy import deepcopy
+from heapq import heappush, heappop
+from math import sqrt
+
+T = TypeVar("T")
 
 
 class Cell(StrEnum):
@@ -18,12 +24,13 @@ class Cell(StrEnum):
     PATH = "*"
 
 
-class MazeLocation(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class MazeLocation:
     row: int
     col: int
 
 
-@dataclass
+@dataclass(slots=True)
 class Maze:
     sparseness: float = field(default=0.2)
     rows: int = field(default=10)
@@ -33,7 +40,8 @@ class Maze:
     _grid: List[List[Cell]] = field(repr=False, init=False)
 
     def __post_init__(self) -> None:
-        self._fill_maze()
+        self._grid = Maze._fill_maze(self.rows, self.cols,
+                                     self.sparseness, self.start, self.goal)
 
     def successors(
             self, cur: MazeLocation, dist: int = 1, exclude: Optional[Cell] = Cell.BLOCKED
@@ -75,7 +83,7 @@ class Maze:
         grid[self.start.row][self.start.col] = Cell.START
         grid[self.goal.row][self.goal.col] = Cell.GOAL
 
-        return _grid_as_str(grid)
+        return Maze._grid_as_str(grid)
 
     def goal_test(self, location: MazeLocation) -> bool:
         return self.goal == location
@@ -88,42 +96,41 @@ class Maze:
         * is not "cur"
         * is not "exclude"
         """
-        if (0 <= other[0] < self.rows and 0 <= other[1] < self.cols) \
+        if (0 <= other.row < self.rows and 0 <= other.col < self.cols) \
                 and (cur != other) \
-                and self._grid[other[0]][other[1]] != exclude:
+                and self._grid[other.row][other.col] != exclude:
             return True
         return False
 
-    def _fill_maze(self) -> None:
-        self._grid = [[Cell.EMPTY for _ in range(
-            self.cols)] for _ in range(self.rows)]
-        for (i, j) in product(range(self.rows), range(self.cols)):
-            if uniform(0.0, 1.0) < self.sparseness:
-                self._grid[i][j] = Cell.BLOCKED
-            else:
-                self._grid[i][j] = Cell.EMPTY
-        self._grid[self.start.row][self.start.col] = Cell.START
-        self._grid[self.goal.row][self.goal.col] = Cell.GOAL
-
     def __str__(self) -> str:
-        return _grid_as_str(self._grid)
+        return Maze._grid_as_str(self._grid)
+
+    @classmethod
+    def _fill_maze(cls, rows: int, cols: int, sparseness: float, start: MazeLocation, goal: MazeLocation) -> List[List[Cell]]:
+        _grid = [[Cell.EMPTY for _ in range(
+            cols)] for _ in range(rows)]
+        for (i, j) in product(range(rows), range(cols)):
+            if uniform(0.0, 1.0) < sparseness:
+                _grid[i][j] = Cell.BLOCKED
+            else:
+                _grid[i][j] = Cell.EMPTY
+        _grid[start.row][start.col] = Cell.START
+        _grid[goal.row][goal.col] = Cell.GOAL
+        return _grid
+
+    @classmethod
+    def _grid_as_str(cls, grid: List[List[Cell]]) -> str:
+        output = []
+        for row in grid:
+            output.append("".join([c for c in row]))
+        return "\n".join(output)
 
 
-def _grid_as_str(grid: List[List[Cell]]) -> str:
-    output = []
-    for row in grid:
-        output.append("".join([c for c in row]))
-    return "\n".join(output)
-
-
-T = TypeVar("T")
-
-
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Stack(Generic[T]):
     _container: List[T] = field(default_factory=list)
 
-    @property
+    @ property
     def empty(self) -> bool:
         return not self._container
 
@@ -134,11 +141,11 @@ class Stack(Generic[T]):
         return self._container.pop()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Queue(Generic[T]):
     _container: Deque[T] = field(default_factory=deque)
 
-    @property
+    @ property
     def empty(self) -> bool:
         return not self._container
 
@@ -149,14 +156,30 @@ class Queue(Generic[T]):
         return self._container.popleft()
 
 
-@dataclass
+@ dataclass(slots=True, frozen=True)
+class PriorityQueue(Generic[T]):
+    container: List[T] = field(default_factory=list)
+
+    @ property
+    def empty(self) -> bool:
+        return not self.container
+
+    def push(self, o: T) -> None:
+        heappush(self.container, o)
+
+    def pop(self) -> T:
+        return heappop(self.container)
+
+
+@dataclass(frozen=True, slots=True)
 class Node(Generic[T]):
     state: T
-    parent: Optional[Self] = field(default=None)
+    parent: Optional[Node[T]] = field(default=None)
     cost: float = field(default=0.0)
     heuristic: float = field(default=0.0)
 
-    def __lt__(self, other: Self) -> bool:
+    def __lt__(self, other: Node[T]) -> bool:
+        """ Needed in particular for ordreing nodes in a PriorityQeue."""
         return (self.cost + self.heuristic) < (other.cost + other.heuristic)
 
 
@@ -181,8 +204,50 @@ def _search_algo(initial: T, goal_test: Callable[[T], bool], successors: Callabl
     return None
 
 
-dfs = partial(_search_algo, frontier=Stack())
-bfs = partial(_search_algo, frontier=Queue())
+def _astar(initial: T, goal_test: Callable[[T], bool], successors: Callable[[T], List[T]], frontier: PriorityQueue[Node[T]], heuristic: Callable[[T], float]) -> Optional[Node[T]]:
+    """
+    A* search algorithm
+    """
+    explored: Dict[T, float] = {initial: 0.0}  # node -> cost
+
+    frontier.push(Node(state=initial, parent=None,
+                  heuristic=heuristic(initial)))
+
+    while not frontier.empty:
+        cur_node: Node[T] = frontier.pop()
+        cur_state: T = cur_node.state
+        if goal_test(cur_state):
+            return cur_node
+        for succ in successors(cur_state):
+            new_cost: float = cur_node.cost + 1
+            if succ not in explored or explored[succ] > new_cost:
+                explored[succ] = new_cost
+                frontier.push(Node(state=succ, parent=cur_node,
+                              cost=new_cost, heuristic=heuristic(succ)))
+    return None
+
+
+def dist_euclidian(_from: MazeLocation, to: MazeLocation) -> float:
+    xdist: int = to.row - _from.row
+    ydist: int = to.col - _from.col
+    return sqrt((xdist * xdist) + (ydist * ydist))
+
+
+def dist_manhattan(_from: MazeLocation, to: MazeLocation) -> float:
+    xdist: int = abs(to.row - _from.row)
+    ydist: int = abs(to.col - _from.col)
+    return float(xdist + ydist)
+
+
+"""
+A type alias for search algoritms. This type is basically the signature of the `_search_algo()`
+function except for the `frontier`  parameter which is curried using `partial()`
+"""
+TSearchAlgorithm = Callable[[T, Callable[[T], bool],
+                             Callable[[T], List[T]]], Optional[Node[T]]]
+
+dfs: TSearchAlgorithm = partial(_search_algo, frontier=Stack())
+bfs: TSearchAlgorithm = partial(_search_algo, frontier=Queue())
 
 
 def to_path(node: Node[T]) -> Iterator[T]:
@@ -222,6 +287,17 @@ def main():
             print(m.mark(to_path(solution_bfs)))
         case None:
             print("No BFS solution found.")
+    print("----------------------")
+
+    manhattan = partial(dist_manhattan, to=m.goal)
+    astar = partial(_astar, frontier=PriorityQueue(), heuristic=manhattan)
+    solution_astar = astar(m.start, m.goal_test, m.successors)
+    print("---- A* solution ----")
+    match solution_astar:
+        case Node():
+            print(m.mark(to_path(solution_astar)))
+        case None:
+            print("No A* solution found.")
     print("----------------------")
 
 
