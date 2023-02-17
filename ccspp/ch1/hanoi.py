@@ -34,7 +34,8 @@ class Hanoi:
         Hanoi(num_discs: 3, tower_a: [1, 2, 3], tower_b: [], tower_c: [])
         """
         return "Hanoi(num_discs: {}, tower_a: {}, tower_b: {}, tower_c: {})".format(
-            self.num_discs, repr(self.tower_a), repr(self.tower_b), repr(self.tower_c)
+            self.num_discs, repr(self.tower_a), repr(
+                self.tower_b), repr(self.tower_c)
         )
 
     def _solve_rec(
@@ -52,5 +53,6 @@ class Hanoi:
         >>> Hanoi().run()
         Hanoi(num_discs: 3, tower_a: [], tower_b: [], tower_c: [1, 2, 3])
         """
-        self._solve_rec(self.tower_a, self.tower_c, self.tower_b, self.num_discs)
+        self._solve_rec(self.tower_a, self.tower_c,
+                        self.tower_b, self.num_discs)
         return self

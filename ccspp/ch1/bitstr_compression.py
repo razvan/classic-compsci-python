@@ -43,8 +43,9 @@ class CompressedGene:
     >>> getsizeof(CompressedGene(original).bstr)
     1092
     """
+
     def __init__(self, gene: str) -> None:
-       self._try_compress(gene)
+        self._try_compress(gene)
 
     def _try_compress(self, gene: str) -> None:
         self.bstr: int = 1
