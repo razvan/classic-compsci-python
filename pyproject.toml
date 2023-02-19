@@ -1,0 +1,25 @@
+[project]
+name = "ccspp_razvan"
+version = "0.0.1"
+authors = [
+    { name = "Razvan Mihai", email = "razvan.mihai+github@gmail.com" },
+]
+description = "Classic computer science problems in Python."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "attrs==22.2.0", # todo: remove
+]
+
+[project.optional-dependencies]
+lint = ['pylint', 'mypy']
+dev = ['pre-commit']
+
+[project.urls]
+"Homepage" = "https://github.com/razvan/classic-compsci-python"
+"Bug Tracker" = "https://github.com/razvan/classic-compsci-python/issues"

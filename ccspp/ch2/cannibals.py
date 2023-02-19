@@ -5,7 +5,7 @@ Missionaries and cannibals
 from __future__ import annotations
 from attrs import define, field, Factory
 from typing import List, Optional, Iterator
-from ch2.maze import bfs, to_path
+from .maze import bfs, to_path
 
 MAX_NUM: int = 3
 
