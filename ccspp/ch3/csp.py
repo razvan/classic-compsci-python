@@ -8,10 +8,11 @@ V = TypeVar("V")  # variable type
 D = TypeVar("D")  # domain type
 
 
-@dataclass(frozen=True)
-class Constraint(Generic[V, D], ABC):
+class Constraint(Generic[V, D], ABC):  # pylint: disable=too-few-public-methods
     """Base class for all constraints."""
-    variables: Set[V] = field()
+
+    def __init__(self, variables: Set[V]) -> None:
+        self.variables: Set[V] = variables
 
     @abstractmethod
     def satisfied(self, assignment: Dict[V, D]) -> bool:
@@ -38,7 +39,7 @@ class CSP(Generic[V, D]):
 
     def append_constraint(self, constraint: Constraint[V, D]) -> None:
         """Update constraints"""
-        _validate_empty_difference(self.variables, constraint.variables)
+        _validate_empty_difference(set(constraint.variables), self.variables)
         for convar in constraint.variables:
             if convar in self.constraints:
                 self.constraints[convar].append(constraint)
@@ -49,7 +50,7 @@ class CSP(Generic[V, D]):
         """Verify that all constraints of variable are satisfied by the assignment."""
         return all((c.satisfied(assignment) for c in self.constraints[variable]))
 
-    def backtracking_search(self, assignment: Dict[V, D]) -> Optional[Dict[V, D]]:
+    def backtracking_search(self, assignment: Optional[Dict[V, D]] = None) -> Optional[Dict[V, D]]:
         """Use backtracking to search for an assignment that satisfies all constraints
         for all variables."""
         if not assignment:
